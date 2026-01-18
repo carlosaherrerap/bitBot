@@ -3,7 +3,7 @@ const fs = require('fs-extra');
 
 class StateManager {
     constructor() {
-        this.currentPath = process.env.HOME || process.env.USERPROFILE || 'C:\\';
+        this.currentPath = process.cwd();
         this.cachePath = null;
         this.copyBuffer = null; // { type: 'copy' | 'cut', path: string }
         this.lastExecutedScript = null;
