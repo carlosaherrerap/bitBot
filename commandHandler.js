@@ -10,8 +10,29 @@ class CommandHandler {
             'list {ruta}', 'q', 'atras', 'opc', 'c {nombre}', 'r {nombre}',
             'x {script}', 'mod {script}', 'estado', 'logs {script}',
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
-            'predict', 'now', 'dame el reporte', 'disco'
+            'predict', 'now', 'dame el reporte', 'disco', 'info {comando}'
         ];
+        this.descriptions = {
+            'list': 'Muestra el contenido de una carpeta. Puedes usar rutas relativas o absolutas (ej: "list ." o "list E:/").',
+            'q': 'Guarda la ruta actual en el caché para usarla luego con otros comandos.',
+            'atras': 'Sube un nivel en la jerarquía de carpetas (va a la carpeta padre).',
+            'opc': 'Muestra el menú interactivo con todos los comandos disponibles.',
+            'c': 'Crea una nueva carpeta con el nombre especificado en la ruta actual o la del caché.',
+            'r': 'Elimina la carpeta o archivo especificado en la ruta actual o la del caché.',
+            'x': 'Ejecuta un script de Python (.py) con soporte para emojis y entrada interactiva.',
+            'mod': 'Permite modificar valores de variables dentro de un script de Python de forma remota.',
+            'estado': 'Muestra el estado actual de ejecución de todos los scripts iniciados.',
+            'logs': 'Muestra las últimas líneas de salida (STDOUT/STDERR) del script especificado.',
+            'cut': 'Marca un archivo o carpeta para ser movido (cortar).',
+            'copy': 'Marca un archivo o carpeta para ser copiado.',
+            'paste': 'Pega el archivo o carpeta previamente copiado o cortado en la ruta actual.',
+            'take control': 'Muestra información sobre procesos de pegado activos.',
+            'predict': 'Proceso automatizado para organizar carpetas de evidencias y filtrado.',
+            'now': 'Muestra los logs del último proceso ejecutado.',
+            'dame el reporte': 'Envía el archivo Excel de reporte de evidencias si existe en la ruta configurada.',
+            'disco': 'Muestra un menú para cambiar rápidamente entre los discos locales (C, D, E, F) y los guarda en caché.',
+            'info': 'Muestra una breve explicación de para qué sirve el comando especificado.'
+        };
         this.opcIndex = 0;
         this.awaitingMod = null; // { script: string, variable: string }
         this.awaitingInteractive = null; // scriptName
@@ -290,6 +311,17 @@ class CommandHandler {
                 console.log('[DRIVE] Showing drive selection menu');
                 this.awaitingDrive = true;
                 await reply('Elija el disco:\n1. Disco C\n2. Disco D\n3. Disco E\n4. Disco F');
+            }
+            else if (text.startsWith('info ')) {
+                const cmdToLookup = text.replace('info ', '').trim().toLowerCase();
+                console.log(`[INFO] Looking up help for: ${cmdToLookup}`);
+                const desc = this.descriptions[cmdToLookup];
+                if (desc) {
+                    await reply(`ℹ️ *INFO: ${cmdToLookup}*\n\n${desc}`);
+                } else {
+                    await reply(`❌ No tengo información sobre el comando "${cmdToLookup}".`);
+                    console.warn(`[INFO] Command not found: ${cmdToLookup}`);
+                }
             }
         } catch (err) {
             console.error(`[ERROR] Processing "${text}": ${err.message}`);
