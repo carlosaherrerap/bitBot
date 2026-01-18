@@ -3,7 +3,8 @@ const {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-    jidDecode
+    jidDecode,
+    Browsers
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
@@ -68,8 +69,9 @@ async function connectToWhatsApp() {
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
+        browser: Browsers.macOS('Desktop'),
+        syncFullHistory: false
     });
-
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -83,11 +85,14 @@ async function connectToWhatsApp() {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom) ?
-                lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut : true;
-            console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
+            const statusCode = (lastDisconnect.error instanceof Boom) ? lastDisconnect.error.output.statusCode : 0;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            console.log(`Connection closed (Code: ${statusCode}). Reconnecting: ${shouldReconnect}`);
+
             if (shouldReconnect) {
-                connectToWhatsApp();
+                console.log('Waiting 3 seconds before reconnecting...');
+                setTimeout(connectToWhatsApp, 3000);
             }
         } else if (connection === 'open') {
             console.log('Opened connection');
