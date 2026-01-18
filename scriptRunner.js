@@ -11,7 +11,8 @@ class ScriptRunner {
 
         const child = spawn('python', [filePath, ...args], {
             cwd: stateManager.getCurrentPath(),
-            shell: true
+            shell: true,
+            env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
         });
 
         this.processes[scriptName] = {
