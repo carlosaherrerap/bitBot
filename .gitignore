@@ -1,3 +1,29 @@
-*node_modules
-/node_modules
-node_modules
+# Dependencies
+node_modules/
+
+# WhatsApp Bot Session & Credentials
+auth_info_baileys/
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Temporary Files
+qr.png
+
+# Environment Variables
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Documentation/Artifacts
+brain/
+task.md
+implementation_plan.md
+walkthrough.md

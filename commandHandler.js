@@ -17,9 +17,13 @@ class CommandHandler {
         this.awaitingInteractive = null; // scriptName
     }
 
-    async handle(message, client) {
-        const text = message.body.trim();
-        const chat = await message.getChat();
+    async handle(msg, sock) {
+        const remoteJid = msg.key.remoteJid;
+        const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
+
+        const reply = async (content) => {
+            await sock.sendMessage(remoteJid, { text: content }, { quoted: msg });
+        };
 
         // Handle interactive input for scripts (like MigrarAudios.py)
         if (this.awaitingInteractive) {
@@ -34,9 +38,9 @@ class CommandHandler {
             const filePath = path.join(stateManager.getCurrentPath(), script);
             try {
                 await fileEditor.modifyVariable(filePath, variable, text);
-                await message.reply(`✅ Variable ${variable} actualizada a "${text}" en ${script}`);
+                await reply(`✅ Variable ${variable} actualizada a "${text}" en ${script}`);
             } catch (err) {
-                await message.reply(`❌ Error al modificar: ${err.message}`);
+                await reply(`❌ Error al modificar: ${err.message}`);
             }
             this.awaitingMod = null;
             return;
@@ -50,39 +54,39 @@ class CommandHandler {
                 const files = await fs.readdir(absoluteRuta);
                 stateManager.setCurrentPath(absoluteRuta);
                 const list = files.map(f => (fs.statSync(path.join(absoluteRuta, f)).isDirectory() ? `📁 ${f}` : `📄 ${f}`)).join('\n');
-                await message.reply(`Contenido de ${absoluteRuta}:\n\n${list || 'Carpeta vacía'}`);
+                await reply(`Contenido de ${absoluteRuta}:\n\n${list || 'Carpeta vacía'}`);
             } catch (err) {
-                await message.reply(`❌ Error: ${err.message}`);
+                await reply(`❌ Error: ${err.message}`);
             }
         }
         else if (text === 'q') {
             stateManager.setCachePath(stateManager.getCurrentPath());
-            await message.reply(`📍 Ruta guardada en caché: ${stateManager.getCachePath()}`);
+            await reply(`📍 Ruta guardada en caché: ${stateManager.getCachePath()}`);
         }
         else if (text === 'atras') {
             stateManager.moveUp();
-            await message.reply(`🔙 Nueva ruta: ${stateManager.getCurrentPath()}`);
+            await reply(`🔙 Nueva ruta: ${stateManager.getCurrentPath()}`);
         }
         else if (text === 'opc') {
             this.opcIndex = 0;
-            await this.showOpc(message);
+            await this.showOpc(msg, sock);
         }
         else if (text === '1' && this.opcIndex !== -1) {
             this.opcIndex += 5;
-            await this.showOpc(message);
+            await this.showOpc(msg, sock);
         }
         else if (text === '2' && this.opcIndex > 0) {
             this.opcIndex -= 5;
-            await this.showOpc(message);
+            await this.showOpc(msg, sock);
         }
         else if (text.startsWith('c ')) {
             const name = text.replace('c ', '').trim();
             const fullPath = path.join(stateManager.getCachePath() || stateManager.getCurrentPath(), name);
             try {
                 await fs.ensureDir(fullPath);
-                await message.reply(`📁 Carpeta creada: ${fullPath}`);
+                await reply(`📁 Carpeta creada: ${fullPath}`);
             } catch (err) {
-                await message.reply(`❌ Error: ${err.message}`);
+                await reply(`❌ Error: ${err.message}`);
             }
         }
         else if (text.startsWith('r ')) {
@@ -90,9 +94,9 @@ class CommandHandler {
             const fullPath = path.join(stateManager.getCachePath() || stateManager.getCurrentPath(), name);
             try {
                 await fs.remove(fullPath);
-                await message.reply(`🗑️ Carpeta eliminada: ${fullPath}`);
+                await reply(`🗑️ Carpeta eliminada: ${fullPath}`);
             } catch (err) {
-                await message.reply(`❌ Error: ${err.message}`);
+                await reply(`❌ Error: ${err.message}`);
             }
         }
         else if (text.startsWith('x ')) {
@@ -101,13 +105,13 @@ class CommandHandler {
             if (await fs.pathExists(filePath)) {
                 scriptRunner.executeScript(script, filePath, [], (output) => {
                     if (output.includes('Selecciona el numero de carpeta') || output.includes('Ingrese el número')) {
-                        client.sendMessage(message.from, `⚠️ Interactivo [${script}]: ${output}`);
+                        sock.sendMessage(remoteJid, { text: `⚠️ Interactivo [${script}]: ${output}` });
                         this.awaitingInteractive = script;
                     }
                 });
-                await message.reply(`🚀 Ejecutando script: ${script}`);
+                await reply(`🚀 Ejecutando script: ${script}`);
             } else {
-                await message.reply(`❌ Script no encontrado: ${filePath}`);
+                await reply(`❌ Script no encontrado: ${filePath}`);
             }
         }
         else if (text.startsWith('mod ')) {
@@ -117,32 +121,32 @@ class CommandHandler {
                 const vars = await fileEditor.getModifiableVariables(filePath);
                 if (vars.length > 0) {
                     this.awaitingMod = { script, variable: vars[0].name };
-                    await message.reply(`BOT: ${vars[0].name}="${vars[0].value}"\nEnvía el nuevo valor:`);
+                    await reply(`BOT: ${vars[0].name}="${vars[0].value}"\nEnvía el nuevo valor:`);
                 } else {
-                    await message.reply(`❌ No se encontraron variables editables conocidas en ${script}`);
+                    await reply(`❌ No se encontraron variables editables conocidas en ${script}`);
                 }
             } catch (err) {
-                await message.reply(`❌ Error: ${err.message}`);
+                await reply(`❌ Error: ${err.message}`);
             }
         }
         else if (text === 'estado') {
             const status = scriptRunner.getStatus();
-            await message.reply(`🤖 ESTADO DE SCRIPTS:\n\n${status.join('\n') || 'Ningún script ejecutado.'}`);
+            await reply(`🤖 ESTADO DE SCRIPTS:\n\n${status.join('\n') || 'Ningún script ejecutado.'}`);
         }
         else if (text.startsWith('logs ')) {
             const script = text.replace('logs ', '').trim();
             const logs = scriptRunner.getLogs(script);
-            await message.reply(`📄 LOGS [${script}]:\n\n${logs}`);
+            await reply(`📄 LOGS [${script}]:\n\n${logs}`);
         }
         else if (text.startsWith('cut ')) {
             const name = text.replace('cut ', '').trim();
             stateManager.setCopyBuffer(path.join(stateManager.getCurrentPath(), name), 'cut');
-            await message.reply(`✂️ Cortado: ${name}`);
+            await reply(`✂️ Cortado: ${name}`);
         }
         else if (text.startsWith('copy ')) {
             const name = text.replace('copy ', '').trim();
             stateManager.setCopyBuffer(path.join(stateManager.getCurrentPath(), name), 'copy');
-            await message.reply(`📋 Copiado: ${name}`);
+            await reply(`📋 Copiado: ${name}`);
         }
         else if (text.startsWith('paste ')) {
             const buffer = stateManager.getCopyBuffer();
@@ -150,72 +154,76 @@ class CommandHandler {
                 const dest = path.join(stateManager.getCurrentPath(), path.basename(buffer.path));
                 if (buffer.type === 'copy') {
                     fs.copy(buffer.path, dest)
-                        .then(() => message.reply(`✅ Pegado (copia): ${dest}`))
-                        .catch(e => message.reply(`❌ Error: ${e.message}`));
+                        .then(() => reply(`✅ Pegado (copia): ${dest}`))
+                        .catch(e => reply(`❌ Error: ${e.message}`));
                 } else {
                     fs.move(buffer.path, dest)
-                        .then(() => message.reply(`✅ Pegado (mover): ${dest}`))
-                        .catch(e => message.reply(`❌ Error: ${e.message}`));
+                        .then(() => reply(`✅ Pegado (mover): ${dest}`))
+                        .catch(e => reply(`❌ Error: ${e.message}`));
                 }
                 stateManager.clearCopyBuffer();
             } else {
-                await message.reply('❌ Nada en el búfer para pegar.');
+                await reply('❌ Nada en el búfer para pegar.');
             }
         }
         else if (text === 'take control') {
             const buffer = stateManager.getCopyBuffer();
             if (buffer) {
-                await message.reply(`Procesando ${buffer.type}... Espera por favor.`);
+                await reply(`Procesando ${buffer.type}... Espera por favor.`);
             } else {
-                await message.reply('No hay procesos de pegado activos.');
+                await reply('No hay procesos de pegado activos.');
             }
         }
         else if (text === 'predict') {
-            await message.reply('¿Número de carpeta?');
+            await reply('¿Número de carpeta?');
             this.awaitingPredict = true;
         }
         else if (this.awaitingPredict) {
             const num = text;
             this.awaitingPredict = false;
-            await this.handlePredict(num, message);
+            await this.handlePredict(num, msg, sock);
         }
         else if (text === 'now') {
             const last = stateManager.lastExecutedScript;
             if (last) {
                 const logs = scriptRunner.getLogs(last);
-                await message.reply(`🕒 ÚLTIMO PROCESO [${last}]:\n\n${logs}`);
+                await reply(`🕒 ÚLTIMO PROCESO [${last}]:\n\n${logs}`);
             } else {
-                await message.reply('No hay procesos recientes.');
+                await reply('No hay procesos recientes.');
             }
         }
         else if (text === 'dame el reporte') {
             const reportPath = 'E:/ProcesoAudios/2026/reporte_evidencias.xlsx';
             if (await fs.pathExists(reportPath)) {
-                const { MessageMedia } = require('whatsapp-web.js');
-                const media = MessageMedia.fromFilePath(reportPath);
-                await client.sendMessage(message.from, media);
+                await sock.sendMessage(remoteJid, {
+                    document: { url: reportPath },
+                    fileName: 'reporte_evidencias.xlsx',
+                    mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                }, { quoted: msg });
             } else {
-                await message.reply('❌ Reporte no encontrado.');
+                await reply('❌ Reporte no encontrado.');
             }
         }
     }
 
-    async showOpc(message) {
+    async showOpc(msg, sock) {
         const chunk = this.commands.slice(this.opcIndex, this.opcIndex + 5);
-        let reply = `📋 COMANDOS (${this.opcIndex + 1}-${Math.min(this.opcIndex + 5, this.commands.length)}):\n\n`;
-        chunk.forEach((cmd, i) => reply += `${this.opcIndex + i + 1}. ${cmd}\n`);
+        let replyText = `📋 COMANDOS (${this.opcIndex + 1}-${Math.min(this.opcIndex + 5, this.commands.length)}):\n\n`;
+        chunk.forEach((cmd, i) => replyText += `${this.opcIndex + i + 1}. ${cmd}\n`);
 
-        reply += '\n';
-        if (this.opcIndex + 5 < this.commands.length) reply += '1. Siguiente ➡️\n';
-        if (this.opcIndex > 0) reply += '2. Anterior ⬅️\n';
+        replyText += '\n';
+        if (this.opcIndex + 5 < this.commands.length) replyText += '1. Siguiente ➡️\n';
+        if (this.opcIndex > 0) replyText += '2. Anterior ⬅️\n';
 
-        await message.reply(reply);
+        await sock.sendMessage(msg.key.remoteJid, { text: replyText }, { quoted: msg });
     }
 
-    async handlePredict(num, message) {
-        // Logic for "predict" command
-        // move evidencias and filtrado from E:\ProcesoAudios\2026 to E:\ProcesoAudios\2026\speechToText_doyouanalitics_{num}
-        // Then copy E:\ProcesoAudios\2026\speechToText_doyouanalitics_{num}\evidencias to E:\ProcesoAudios\2026\evidencias_general
+    async handlePredict(num, msg, sock) {
+        const remoteJid = msg.key.remoteJid;
+        const reply = async (content) => {
+            await sock.sendMessage(remoteJid, { text: content }, { quoted: msg });
+        };
+
         const base = 'E:/ProcesoAudios/2026';
         const targetParent = path.join(base, `speechToText_doyouanalitics_${num}`);
         const generalEvidencias = path.join(base, 'evidencias_general');
@@ -239,9 +247,9 @@ class CommandHandler {
                 await fs.copy(targetEvidencias, generalEvidencias);
             }
 
-            await message.reply(`✅ Proceso predict completado para carpeta ${num}`);
+            await reply(`✅ Proceso predict completado para carpeta ${num}`);
         } catch (err) {
-            await message.reply(`❌ Error en predict: ${err.message}`);
+            await reply(`❌ Error en predict: ${err.message}`);
         }
     }
 }
