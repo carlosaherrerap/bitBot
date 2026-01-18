@@ -91,7 +91,20 @@ class CommandHandler {
 
                 const files = await fs.readdir(absoluteRuta);
                 stateManager.setCurrentPath(absoluteRuta);
-                const list = files.map(f => (fs.statSync(path.join(absoluteRuta, f)).isDirectory() ? `📁 ${f}` : `📄 ${f}`)).join('\n');
+
+                const listItems = [];
+                for (const f of files) {
+                    try {
+                        const fullPath = path.join(absoluteRuta, f);
+                        const isDir = fs.statSync(fullPath).isDirectory();
+                        listItems.push(isDir ? `📁 ${f}` : `📄 ${f}`);
+                    } catch (statErr) {
+                        // Skip system/restricted folders like "System Volume Information"
+                        console.warn(`[LIST] Skipping inaccessible item: ${f} (${statErr.code})`);
+                    }
+                }
+
+                const list = listItems.join('\n');
                 await reply(`Contenido de ${absoluteRuta}:\n\n${list || 'Carpeta vacía'}`);
                 console.log(`[LIST] Success: Path set to ${absoluteRuta}`);
             }
