@@ -10,11 +10,12 @@ class CommandHandler {
             'list {ruta}', 'q', 'atras', 'opc', 'c {nombre}', 'r {nombre}',
             'x {script}', 'mod {script}', 'estado', 'logs {script}',
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
-            'predict', 'now', 'dame el reporte'
+            'predict', 'now', 'dame el reporte', 'disco'
         ];
         this.opcIndex = 0;
         this.awaitingMod = null; // { script: string, variable: string }
         this.awaitingInteractive = null; // scriptName
+        this.awaitingDrive = false;
     }
 
     async handle(msg, sock) {
@@ -34,6 +35,24 @@ class CommandHandler {
             console.log(`[INPUT] Forwarding to script: ${this.awaitingInteractive}`);
             scriptRunner.sendInput(this.awaitingInteractive, text);
             this.awaitingInteractive = null;
+            return;
+        }
+
+        // Handle drive selection
+        if (this.awaitingDrive) {
+            const drives = { '1': 'C', '2': 'D', '3': 'E', '4': 'F' };
+            const selected = drives[text];
+            if (selected) {
+                const targetPath = `${selected}:\\`;
+                stateManager.setCurrentPath(targetPath);
+                stateManager.setCachePath(targetPath);
+                await reply(`✅ Disco ${selected} seleccionado.\n📍 Ruta actual y caché: ${targetPath}`);
+                console.log(`[DRIVE] Switched to ${targetPath} and cached.`);
+            } else {
+                await reply('❌ Selección no válida. Operación cancelada.');
+                console.warn(`[DRIVE] Invalid selection: ${text}`);
+            }
+            this.awaitingDrive = false;
             return;
         }
 
@@ -57,9 +76,19 @@ class CommandHandler {
         // Parse commands
         try {
             if (text.startsWith('list ')) {
-                const ruta = text.replace('list ', '').trim();
+                let ruta = text.replace('list ', '').trim();
                 console.log(`[LIST] Attempting to list: ${ruta}`);
-                const absoluteRuta = path.isAbsolute(ruta) ? path.resolve(ruta) : path.join(stateManager.getCurrentPath(), ruta);
+
+                // Si el usuario escribe solo una letra (ej: "E" o "E:"), asumimos que quiere ir a la raíz del disco
+                if (/^[a-zA-Z]:?$/.test(ruta)) {
+                    if (!ruta.endsWith(':')) ruta += ':';
+                    ruta += path.sep;
+                }
+
+                const absoluteRuta = (path.isAbsolute(ruta) || /^[a-zA-Z]:[\\\/]/.test(ruta))
+                    ? path.resolve(ruta)
+                    : path.join(stateManager.getCurrentPath(), ruta);
+
                 const files = await fs.readdir(absoluteRuta);
                 stateManager.setCurrentPath(absoluteRuta);
                 const list = files.map(f => (fs.statSync(path.join(absoluteRuta, f)).isDirectory() ? `📁 ${f}` : `📄 ${f}`)).join('\n');
@@ -243,6 +272,11 @@ class CommandHandler {
                     await reply('❌ Reporte no encontrado.');
                     console.error('[REPORT] Not found');
                 }
+            }
+            else if (text === 'disco') {
+                console.log('[DRIVE] Showing drive selection menu');
+                this.awaitingDrive = true;
+                await reply('Elija el disco:\n1. Disco C\n2. Disco D\n3. Disco E\n4. Disco F');
             }
         } catch (err) {
             console.error(`[ERROR] Processing "${text}": ${err.message}`);
