@@ -73,6 +73,7 @@ def copy_remote_files(files, dest_dir):
     return copied
 
 
+
 def process_day_folder(day):
     # Carpeta UNC remota del día
     day_folder = Path(f"{UNC_BASE}\\{day}")

@@ -162,11 +162,12 @@ class CommandHandler {
                 const filePath = path.join(stateManager.getCurrentPath(jid), script);
                 if (await fs.pathExists(filePath)) {
                     scriptRunner.executeScript(script, filePath, [], (output) => {
+                        const promptMsg = output.includes('Ingrese el número') ? '🤖 ¿Qué carpeta deseas procesar?' : `⚠️ Interactivo [${script}]: ${output}`;
                         if (output.includes('Selecciona el numero de carpeta') || output.includes('Ingrese el número')) {
-                            sock.sendMessage(jid, { text: `⚠️ Interactivo [${script}]: ${output}` });
+                            sock.sendMessage(jid, { text: promptMsg });
                             this.awaitingInteractive[jid] = script;
                         }
-                    });
+                    }, jid);
                     await reply(`🚀 Ejecutando script: ${script}`);
                 } else {
                     await reply(`❌ Script no encontrado: ${filePath}`);

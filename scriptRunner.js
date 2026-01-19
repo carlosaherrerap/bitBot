@@ -6,11 +6,11 @@ class ScriptRunner {
         this.processes = {}; // { scriptName: { process, logs: [], lastLog: string } }
     }
 
-    executeScript(scriptName, filePath, args = [], interactiveHandler = null) {
-        console.log(`Executing ${scriptName} at ${filePath} with args ${args}`);
+    executeScript(scriptName, filePath, args = [], interactiveHandler = null, jid = 'default') {
+        console.log(`Executing ${scriptName} at ${filePath} for ${jid}`);
 
-        const child = spawn('python', [filePath, ...args], {
-            cwd: stateManager.getCurrentPath(),
+        const child = spawn('python', ['-u', filePath, ...args], {
+            cwd: stateManager.getCurrentPath(jid),
             shell: true,
             env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
         });
