@@ -237,39 +237,56 @@ class CommandHandler {
                 const buffer = stateManager.getCopyBuffer();
                 if (buffer) {
                     const dest = path.join(stateManager.getCurrentPath(), path.basename(buffer.path));
-                    if (buffer.type === 'copy') {
-                        fs.copy(buffer.path, dest)
-                            .then(() => {
-                                reply(`✅ Pegado (copia): ${dest}`);
-                                console.log('[PASTE] Copy success');
-                            })
-                            .catch(e => {
-                                reply(`❌ Error: ${e.message}`);
-                                console.error(`[PASTE] Copy failed: ${e.message}`);
-                            });
-                    } else {
-                        fs.move(buffer.path, dest)
-                            .then(() => {
-                                reply(`✅ Pegado (mover): ${dest}`);
-                                console.log('[PASTE] Move success');
-                            })
-                            .catch(e => {
-                                reply(`❌ Error: ${e.message}`);
-                                console.error(`[PASTE] Move failed: ${e.message}`);
-                            });
-                    }
+                    stateManager.setOperationStatus({
+                        type: buffer.type,
+                        source: buffer.path,
+                        dest: dest,
+                        progress: 'Iniciando...',
+                        startTime: new Date()
+                    });
+
+                    // Clear buffer immediately to prevent duplicate paste calls
                     stateManager.clearCopyBuffer();
+
+                    const operation = buffer.type === 'copy' ? fs.copy(buffer.path, dest) : fs.move(buffer.path, dest);
+
+                    operation
+                        .then(() => {
+                            reply(`✅ ${buffer.type === 'copy' ? 'Copia' : 'Mover'} finalizado: ${dest}`);
+                            stateManager.setOperationStatus({
+                                ...stateManager.getOperationStatus(),
+                                progress: '100% (Completado)'
+                            });
+                            console.log(`[PASTE] ${buffer.type} success`);
+                        })
+                        .catch(e => {
+                            reply(`❌ Error al pegar: ${e.message}`);
+                            stateManager.setOperationStatus({
+                                ...stateManager.getOperationStatus(),
+                                progress: `Error: ${e.message}`
+                            });
+                            console.error(`[PASTE] ${buffer.type} failed: ${e.message}`);
+                        });
+
+                    await reply(`⏳ Iniciando ${buffer.type === 'copy' ? 'copia' : 'movimiento'}... Usa "take control" para ver progreso.`);
                 } else {
                     await reply('❌ Nada en el búfer para pegar.');
                     console.warn('[PASTE] Buffer empty');
                 }
             }
             else if (text === 'take control') {
-                const buffer = stateManager.getCopyBuffer();
-                if (buffer) {
-                    await reply(`Procesando ${buffer.type}... Espera por favor.`);
+                const status = stateManager.getOperationStatus();
+                if (status) {
+                    const elapsed = Math.round((new Date() - status.startTime) / 1000);
+                    let info = `📊 PROCESO ACTUAL:\n`;
+                    info += `- Tipo: ${status.type === 'copy' ? 'Copia' : 'Corte'}\n`;
+                    info += `- Desde: ${status.source}\n`;
+                    info += `- Hacia: ${status.dest}\n`;
+                    info += `- Estado: ${status.progress}\n`;
+                    info += `- Tiempo: ${elapsed}s`;
+                    await reply(info);
                 } else {
-                    await reply('No hay procesos de pegado activos.');
+                    await reply('No hay procesos de pegado activos o terminados recientemente.');
                 }
             }
             else if (text === 'predict') {

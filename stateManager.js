@@ -41,6 +41,18 @@ class StateManager {
     clearCopyBuffer() {
         this.copyBuffer = null;
     }
+
+    setOperationStatus(status) {
+        this.operationStatus = status; // { type, source, dest, progress, startTime }
+    }
+
+    getOperationStatus() {
+        return this.operationStatus;
+    }
+
+    clearOperationStatus() {
+        this.operationStatus = null;
+    }
 }
 
 module.exports = new StateManager();
