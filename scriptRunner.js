@@ -79,6 +79,16 @@ class ScriptRunner {
         return statusReport;
     }
 
+    stopScript(scriptName) {
+        if (this.processes[scriptName] && this.processes[scriptName].process) {
+            console.log(`Stopping script: ${scriptName}`);
+            this.processes[scriptName].process.kill();
+            this.processes[scriptName].status = 'CANCELADO';
+            return true;
+        }
+        return false;
+    }
+
     getLogs(scriptName) {
         if (this.processes[scriptName]) {
             return this.processes[scriptName].logs.slice(-10).join('\n'); // Last 10 lines

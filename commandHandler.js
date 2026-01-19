@@ -8,7 +8,7 @@ class CommandHandler {
     constructor() {
         this.commands = [
             'list {ruta}', 'q', 'atras', 'opc', 'c {nombre}', 'r {nombre}',
-            'x {script}', 'mod {script}', 'estado', 'logs {script}',
+            'x {script}', 'mod {script}', 'estado', 'logs {script}', 'cancel {script}',
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
             'predict', 'now', 'dame el reporte', 'disco', 'info {comando}'
         ];
@@ -23,6 +23,7 @@ class CommandHandler {
             'mod': 'Permite modificar valores de variables dentro de un script de Python de forma remota.',
             'estado': 'Muestra el estado actual de ejecución de todos los scripts iniciados.',
             'logs': 'Muestra las últimas líneas de salida (STDOUT/STDERR) del script especificado.',
+            'cancel': 'Cancela la ejecución de un script que esté corriendo actualmente.',
             'cut': 'Marca un archivo o carpeta para ser movido (cortar).',
             'copy': 'Marca un archivo o carpeta para ser copiado.',
             'paste': 'Pega el archivo o carpeta previamente copiado o cortado en la ruta actual.',
@@ -208,6 +209,15 @@ class CommandHandler {
             else if (text.startsWith('logs ')) {
                 const script = text.replace('logs ', '').trim();
                 await reply(`📄 LOGS [${script}]:\n\n${scriptRunner.getLogs(script)}`);
+            }
+            else if (text.startsWith('cancel ')) {
+                const script = text.replace('cancel ', '').trim();
+                const success = scriptRunner.stopScript(script);
+                if (success) {
+                    await reply(`🛑 Script [${script}] cancelado correctamente.`);
+                } else {
+                    await reply(`❌ No se pudo cancelar [${script}]. ¿Está corriendo?`);
+                }
             }
             else if (text.startsWith('cut ')) {
                 const name = text.replace('cut ', '').trim();
