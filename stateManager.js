@@ -3,55 +3,65 @@ const fs = require('fs-extra');
 
 class StateManager {
     constructor() {
-        this.currentPath = process.cwd();
-        this.cachePath = null;
-        this.copyBuffer = null; // { type: 'copy' | 'cut', path: string }
-        this.lastExecutedScript = null;
-        this.scriptsStatus = {}; // { scriptName: { status: string, progress: string, startTime: Date, eta: string } }
+        this.sessions = {}; // jid -> { currentPath, cachePath, copyBuffer, lastExecutedScript, operationStatus }
     }
 
-    setCurrentPath(newPath) {
-        this.currentPath = path.resolve(newPath);
+    _getSession(jid) {
+        if (!this.sessions[jid]) {
+            this.sessions[jid] = {
+                currentPath: process.cwd(),
+                cachePath: null,
+                copyBuffer: null,
+                lastExecutedScript: null,
+                operationStatus: null
+            };
+        }
+        return this.sessions[jid];
     }
 
-    getCurrentPath() {
-        return this.currentPath;
+    setCurrentPath(jid, newPath) {
+        this._getSession(jid).currentPath = path.resolve(newPath);
     }
 
-    setCachePath(newPath) {
-        this.cachePath = path.resolve(newPath);
+    getCurrentPath(jid) {
+        return this._getSession(jid).currentPath;
     }
 
-    getCachePath() {
-        return this.cachePath;
+    setCachePath(jid, newPath) {
+        this._getSession(jid).cachePath = path.resolve(newPath);
     }
 
-    moveUp() {
-        this.currentPath = path.dirname(this.currentPath);
+    getCachePath(jid) {
+        return this._getSession(jid).cachePath;
     }
 
-    setCopyBuffer(path, type) {
-        this.copyBuffer = { path, type };
+    moveUp(jid) {
+        const session = this._getSession(jid);
+        session.currentPath = path.dirname(session.currentPath);
     }
 
-    getCopyBuffer() {
-        return this.copyBuffer;
+    setCopyBuffer(jid, filePath, type) {
+        this._getSession(jid).copyBuffer = { path: filePath, type };
     }
 
-    clearCopyBuffer() {
-        this.copyBuffer = null;
+    getCopyBuffer(jid) {
+        return this._getSession(jid).copyBuffer;
     }
 
-    setOperationStatus(status) {
-        this.operationStatus = status; // { type, source, dest, progress, startTime }
+    clearCopyBuffer(jid) {
+        this._getSession(jid).copyBuffer = null;
     }
 
-    getOperationStatus() {
-        return this.operationStatus;
+    setOperationStatus(jid, status) {
+        this._getSession(jid).operationStatus = status; // { type, source, dest, progress, startTime }
     }
 
-    clearOperationStatus() {
-        this.operationStatus = null;
+    getOperationStatus(jid) {
+        return this._getSession(jid).operationStatus;
+    }
+
+    clearOperationStatus(jid) {
+        this._getSession(jid).operationStatus = null;
     }
 }
 
