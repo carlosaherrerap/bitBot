@@ -143,19 +143,37 @@ class CommandHandler {
             }
             else if (text.startsWith('c ')) {
                 const name = text.replace('c ', '').trim();
-                // Prioritize CURRENT path for intuitive use, even if rule 5 said cache. 
-                // Let's use cache if set, else current. But show it!
-                const targetDir = stateManager.getCachePath(jid) || stateManager.getCurrentPath(jid);
-                const fullPath = path.join(targetDir, name);
-                await fs.ensureDir(fullPath);
-                await reply(`📁 Carpeta creada: ${fullPath}`);
+                const cache = stateManager.getCachePath(jid);
+                const current = stateManager.getCurrentPath(jid);
+                const targetDir = cache || current;
+                const fullPath = path.resolve(targetDir, name);
+
+                console.log(`[CREATE] Target: ${fullPath} (Cache: ${cache}, Current: ${current})`);
+                try {
+                    await fs.ensureDir(fullPath);
+                    await reply(`📁 Carpeta creada con éxito en:\n${fullPath}${cache ? '\n(Usando ruta en caché)' : ''}`);
+                } catch (err) {
+                    await reply(`❌ Error al crear carpeta: ${err.message}`);
+                }
             }
             else if (text.startsWith('r ')) {
                 const name = text.replace('r ', '').trim();
-                const targetDir = stateManager.getCachePath(jid) || stateManager.getCurrentPath(jid);
-                const fullPath = path.join(targetDir, name);
-                await fs.remove(fullPath);
-                await reply(`🗑️ Carpeta eliminada: ${fullPath}`);
+                const cache = stateManager.getCachePath(jid);
+                const current = stateManager.getCurrentPath(jid);
+                const targetDir = cache || current;
+                const fullPath = path.resolve(targetDir, name);
+
+                console.log(`[REMOVE] Target: ${fullPath}`);
+                try {
+                    if (await fs.pathExists(fullPath)) {
+                        await fs.remove(fullPath);
+                        await reply(`🗑️ Eliminado con éxito:\n${fullPath}${cache ? '\n(Usando ruta en caché)' : ''}`);
+                    } else {
+                        await reply(`❌ No existe: ${fullPath}`);
+                    }
+                } catch (err) {
+                    await reply(`❌ Error al eliminar: ${err.message}`);
+                }
             }
             else if (text.startsWith('x ')) {
                 const script = text.replace('x ', '').trim();
@@ -193,33 +211,64 @@ class CommandHandler {
             }
             else if (text.startsWith('cut ')) {
                 const name = text.replace('cut ', '').trim();
-                stateManager.setCopyBuffer(jid, path.join(stateManager.getCurrentPath(jid), name), 'cut');
-                await reply(`✂️ Cortado: ${name}`);
+                const fullPath = path.resolve(stateManager.getCurrentPath(jid), name);
+                if (await fs.pathExists(fullPath)) {
+                    stateManager.setCopyBuffer(jid, fullPath, 'cut');
+                    await reply(`✂️ Cortado (listo para pegar): ${name}`);
+                    console.log(`[CUT] Memory set: ${fullPath}`);
+                } else {
+                    await reply(`❌ No se encuentra el origen: ${fullPath}`);
+                }
             }
             else if (text.startsWith('copy ')) {
                 const name = text.replace('copy ', '').trim();
-                stateManager.setCopyBuffer(jid, path.join(stateManager.getCurrentPath(jid), name), 'copy');
-                await reply(`📋 Copiado: ${name}`);
+                const fullPath = path.resolve(stateManager.getCurrentPath(jid), name);
+                if (await fs.pathExists(fullPath)) {
+                    stateManager.setCopyBuffer(jid, fullPath, 'copy');
+                    await reply(`📋 Copiado (listo para pegar): ${name}`);
+                    console.log(`[COPY] Memory set: ${fullPath}`);
+                } else {
+                    await reply(`❌ No se encuentra el origen: ${fullPath}`);
+                }
             }
             else if (text.startsWith('paste ')) {
                 const buffer = stateManager.getCopyBuffer(jid);
-                if (buffer) {
-                    const dest = path.join(stateManager.getCurrentPath(jid), path.basename(buffer.path));
-                    stateManager.setOperationStatus(jid, { type: buffer.type, source: buffer.path, dest, progress: 'En proceso...', startTime: new Date() });
-                    stateManager.clearCopyBuffer(jid);
+                if (!buffer) {
+                    await reply('❌ Nada para pegar. Usa "copy" o "cut" primero.');
+                    return;
+                }
 
-                    const op = buffer.type === 'copy' ? fs.copy(buffer.path, dest) : fs.move(buffer.path, dest);
-                    op.then(() => {
-                        reply(`✅ Pegado finalizado: ${dest}`);
-                        stateManager.setOperationStatus(jid, { ...stateManager.getOperationStatus(jid), progress: 'Finalizado' });
-                    }).catch(e => {
+                const dest = path.resolve(stateManager.getCurrentPath(jid), path.basename(buffer.path));
+                console.log(`[PASTE] ${buffer.type} from ${buffer.path} to ${dest}`);
+
+                if (buffer.path === dest) {
+                    await reply('❌ No puedes pegar en la misma ubicación.');
+                    return;
+                }
+
+                stateManager.setOperationStatus(jid, {
+                    type: buffer.type,
+                    source: buffer.path,
+                    dest,
+                    progress: 'Iniciado...',
+                    startTime: new Date()
+                });
+
+                await reply(`⏳ Iniciando ${buffer.type === 'copy' ? 'copia' : 'movimiento'}... Usa "take control" para ver.`);
+
+                const operation = buffer.type === 'copy' ? fs.copy(buffer.path, dest) : fs.move(buffer.path, dest, { overwrite: true });
+
+                operation
+                    .then(() => {
+                        reply(`✅ Pegado finalizado con éxito:\n${dest}`);
+                        stateManager.setOperationStatus(jid, { ...stateManager.getOperationStatus(jid), progress: '100% (Completado)' });
+                        stateManager.clearCopyBuffer(jid);
+                    })
+                    .catch(e => {
                         reply(`❌ Error al pegar: ${e.message}`);
                         stateManager.setOperationStatus(jid, { ...stateManager.getOperationStatus(jid), progress: `Error: ${e.message}` });
+                        console.error(`[PASTE] Error:`, e);
                     });
-                    await reply(`⏳ Pegando... Usa "take control" para ver.`);
-                } else {
-                    await reply('❌ Nada para pegar.');
-                }
             }
             else if (text === 'take control') {
                 const status = stateManager.getOperationStatus(jid);
