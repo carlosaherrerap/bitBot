@@ -12,6 +12,7 @@ class CommandHandler {
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
             'predict', 'now', 'dame el reporte', 'disco', 'info {comando}'
         ];
+        //INFORMACION DE CADA UNO DE LOS COMANDOS
         this.descriptions = {
             'list': 'Muestra el contenido de una carpeta. Puedes usar rutas relativas o absolutas (ej: "list ." o "list E:/").',
             'q': 'Guarda la ruta actual en el caché para usarla luego con otros comandos.',
@@ -84,13 +85,7 @@ class CommandHandler {
             const currentVar = variables[currentIndex];
 
             try {
-                // If user sends "skip" or something, we could handle it, but for now just update
-                let cleanValue = text;
-                if (currentVar.name === 'ruta_base' && text.length === 2) {
-                    cleanValue = `20${text}`; // 26 -> 2026
-                }
-
-                await fileEditor.modifyVariable(script, currentVar.name, cleanValue);
+                await fileEditor.modifyVariable(script, currentVar.name, text);
 
                 const nextIndex = currentIndex + 1;
                 if (nextIndex < variables.length) {
@@ -98,7 +93,7 @@ class CommandHandler {
                     const nextVar = variables[nextIndex];
                     await reply(`✅ ${currentVar.name} actualizado.\n\n📌 ${nextVar.label}:\nValor actual: "${nextVar.value}"\n\nEnvía el nuevo valor:`);
                 } else {
-                    await reply(`✅ Proceso finalizado. Todas las variables de ${path.basename(script)} han sido actualizadas.`);
+                    await reply(`✅ Proceso finalizado. El script ${path.basename(script)} ha sido actualizado completamente.`);
                     this.awaitingMod[jid] = null;
                 }
             } catch (err) {
