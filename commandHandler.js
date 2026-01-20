@@ -80,15 +80,31 @@ class CommandHandler {
 
         // Handle modification values
         if (this.awaitingMod[jid]) {
-            const { script, variable } = this.awaitingMod[jid];
-            const filePath = path.join(stateManager.getCurrentPath(jid), script);
+            const { script, variables, currentIndex } = this.awaitingMod[jid];
+            const currentVar = variables[currentIndex];
+
             try {
-                await fileEditor.modifyVariable(filePath, variable, text);
-                await reply(`✅ Variable ${variable} actualizada a "${text}" en ${script}`);
+                // If user sends "skip" or something, we could handle it, but for now just update
+                let cleanValue = text;
+                if (currentVar.name === 'ruta_base' && text.length === 2) {
+                    cleanValue = `20${text}`; // 26 -> 2026
+                }
+
+                await fileEditor.modifyVariable(script, currentVar.name, cleanValue);
+
+                const nextIndex = currentIndex + 1;
+                if (nextIndex < variables.length) {
+                    this.awaitingMod[jid].currentIndex = nextIndex;
+                    const nextVar = variables[nextIndex];
+                    await reply(`✅ ${currentVar.name} actualizado.\n\n📌 ${nextVar.label}:\nValor actual: "${nextVar.value}"\n\nEnvía el nuevo valor:`);
+                } else {
+                    await reply(`✅ Proceso finalizado. Todas las variables de ${path.basename(script)} han sido actualizadas.`);
+                    this.awaitingMod[jid] = null;
+                }
             } catch (err) {
-                await reply(`❌ Error al modificar: ${err.message}`);
+                await reply(`❌ Error al modificar ${currentVar.name}: ${err.message}`);
+                this.awaitingMod[jid] = null;
             }
-            this.awaitingMod[jid] = null;
             return;
         }
 
@@ -194,12 +210,23 @@ class CommandHandler {
             }
             else if (text.startsWith('mod ')) {
                 const script = text.replace('mod ', '').trim();
-                const vars = await fileEditor.getModifiableVariables(path.join(stateManager.getCurrentPath(jid), script));
-                if (vars.length > 0) {
-                    this.awaitingMod[jid] = { script, variable: vars[0].name };
-                    await reply(`BOT: ${vars[0].name}="${vars[0].value}"\nEnvía el nuevo valor:`);
-                } else {
-                    await reply(`❌ No hay variables para editar en ${script}`);
+                const absolutePath = path.isAbsolute(script) ? script : path.join(stateManager.getCurrentPath(jid), script);
+
+                try {
+                    const vars = await fileEditor.getModifiableVariables(absolutePath);
+                    if (vars.length > 0) {
+                        this.awaitingMod[jid] = {
+                            script: absolutePath,
+                            variables: vars,
+                            currentIndex: 0
+                        };
+                        const firstVar = vars[0];
+                        await reply(`🛠️ MODIFICANDO: ${path.basename(absolutePath)}\n\n📌 ${firstVar.label}:\nValor actual: "${firstVar.value}"\n\nEnvía el nuevo valor:`);
+                    } else {
+                        await reply(`❌ No se encontraron variables editables en este script.`);
+                    }
+                } catch (err) {
+                    await reply(`❌ Error al leer el script: ${err.message}`);
                 }
             }
             else if (text === 'estado') {
