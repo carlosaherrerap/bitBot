@@ -1,9 +1,10 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const stateManager = require('./stateManager');
 
 class ScriptRunner {
     constructor() {
         this.processes = {}; // { scriptName: { process, logs: [], lastLog: string } }
+        this.lastExecutedScript = null;
     }
 
     executeScript(scriptName, filePath, args = [], interactiveHandler = null, jid = 'default') {
@@ -17,6 +18,7 @@ class ScriptRunner {
 
         this.processes[scriptName] = {
             process: child,
+            pid: child.pid,
             logs: [],
             lastLog: '',
             startTime: new Date(),
@@ -25,6 +27,7 @@ class ScriptRunner {
             eta: 'Calculando...'
         };
 
+        this.lastExecutedScript = scriptName;
         stateManager.lastExecutedScript = scriptName;
 
         child.stdout.on('data', (data) => {
@@ -79,12 +82,35 @@ class ScriptRunner {
         return statusReport;
     }
 
+    getLastScript() {
+        return this.lastExecutedScript;
+    }
+
     stopScript(scriptName) {
         if (this.processes[scriptName] && this.processes[scriptName].process) {
-            console.log(`Stopping script: ${scriptName}`);
-            this.processes[scriptName].process.kill();
-            this.processes[scriptName].status = 'CANCELADO';
-            return true;
+            const proc = this.processes[scriptName];
+            console.log(`Stopping script: ${scriptName} (PID: ${proc.pid})`);
+
+            try {
+                // On Windows, use taskkill to kill the entire process tree
+                if (process.platform === 'win32' && proc.pid) {
+                    execSync(`taskkill /F /T /PID ${proc.pid}`, { stdio: 'ignore' });
+                } else {
+                    proc.process.kill('SIGKILL');
+                }
+                this.processes[scriptName].status = 'CANCELADO';
+                return true;
+            } catch (err) {
+                console.error(`Error killing process: ${err.message}`);
+                // Fallback to normal kill
+                try {
+                    proc.process.kill();
+                    this.processes[scriptName].status = 'CANCELADO';
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
         }
         return false;
     }

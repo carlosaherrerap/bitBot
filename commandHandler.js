@@ -10,7 +10,8 @@ class CommandHandler {
             'list {ruta}', 'q', 'atras', 'opc', 'c {nombre}', 'r {nombre}',
             'x {script}', 'mod {script}', 'estado', 'logs {script}', 'cancel {script}',
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
-            'predict', 'now', 'dame el reporte', 'disco', 'info {comando}'
+            'predict', 'now', 'dame el reporte', 'disco', 'info {comando}',
+            'reset session'
         ];
         //INFORMACION DE CADA UNO DE LOS COMANDOS
         this.descriptions = {
@@ -33,7 +34,8 @@ class CommandHandler {
             'now': 'Muestra los logs del último proceso ejecutado.',
             'dame el reporte': 'Envía el archivo Excel de reporte de evidencias si existe en la ruta configurada.',
             'disco': 'Muestra un menú para cambiar rápidamente entre los discos locales (C, D, E, F) y los guarda en caché.',
-            'info': 'Muestra una breve explicación de para qué sirve el comando especificado.'
+            'info': 'Muestra una breve explicación de para qué sirve el comando especificado.',
+            'reset session': 'Elimina los archivos de sesión de WhatsApp para solucionar errores de conexión (Bad MAC). Requiere re-escanear el QR.'
         };
         this.opcIndex = 0;
         this.awaitingMod = {}; // jid -> { script, variable }
@@ -232,8 +234,15 @@ class CommandHandler {
                 const script = text.replace('logs ', '').trim();
                 await reply(`📄 LOGS [${script}]:\n\n${scriptRunner.getLogs(script)}`);
             }
-            else if (text.startsWith('cancel ')) {
-                const script = text.replace('cancel ', '').trim();
+            else if (text === 'cancel' || text.startsWith('cancel ')) {
+                let script = text.replace('cancel ', '').trim();
+                if (text === 'cancel') {
+                    script = scriptRunner.getLastScript();
+                    if (!script) {
+                        await reply('❌ No hay ningún script reciente para cancelar.');
+                        return;
+                    }
+                }
                 const success = scriptRunner.stopScript(script);
                 if (success) {
                     await reply(`🛑 Script [${script}] cancelado correctamente.`);
@@ -336,6 +345,21 @@ class CommandHandler {
                 const cmd = text.replace('info ', '').trim().toLowerCase();
                 const desc = this.descriptions[cmd];
                 await reply(desc ? `ℹ️ *${cmd}*: ${desc}` : '❌ Comando no reconocido.');
+            }
+            else if (text === 'reset session') {
+                const sessionPath = path.join(__dirname, 'auth_info_baileys');
+                try {
+                    if (await fs.pathExists(sessionPath)) {
+                        await fs.remove(sessionPath);
+                        await reply('🔄 Sesión eliminada. El bot se reiniciará y deberás escanear el QR nuevamente.');
+                        console.log('[SESSION] Session folder deleted. Exiting for restart...');
+                        process.exit(0);
+                    } else {
+                        await reply('⚠️ No se encontró la carpeta de sesión.');
+                    }
+                } catch (err) {
+                    await reply(`❌ Error al eliminar sesión: ${err.message}`);
+                }
             }
         } catch (err) {
             await reply(`❌ Error: ${err.message}`);
