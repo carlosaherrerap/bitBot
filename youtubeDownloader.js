@@ -1,5 +1,5 @@
 const yts = require('yt-search');
-const { YTDlp } = require('ytdlp-nodejs');
+const { YtDlp } = require('ytdlp-nodejs');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -7,7 +7,7 @@ class YouTubeDownloader {
     constructor() {
         this.downloadsDir = path.join(process.cwd(), 'downloads');
         fs.ensureDirSync(this.downloadsDir);
-        this.ytdlp = new YTDlp();
+        this.ytdlp = new YtDlp();
     }
 
     async search(query) {
