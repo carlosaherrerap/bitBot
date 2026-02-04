@@ -3,6 +3,7 @@ const path = require('path');
 const stateManager = require('./stateManager');
 const fileEditor = require('./fileEditor');
 const scriptRunner = require('./scriptRunner');
+const youtubeDownloader = require('./youtubeDownloader');
 
 class CommandHandler {
     constructor() {
@@ -10,7 +11,8 @@ class CommandHandler {
             'list {ruta}', 'q', 'atras', 'opc', 'c {nombre}', 'r {nombre}',
             'x {script}', 'mod {script}', 'estado', 'logs {script}', 'cancel {script}',
             'cut {nombre}', 'copy {nombre}', 'paste {nombre}', 'take control',
-            'predict', 'now', 'dame el reporte', 'disco', 'info {comando}'
+            'predict', 'now', 'dame el reporte', 'disco', 'info {comando}',
+            'mp3', 'mp4'
         ];
         //INFORMACION DE CADA UNO DE LOS COMANDOS
         this.descriptions = {
@@ -33,13 +35,17 @@ class CommandHandler {
             'now': 'Muestra los logs del último proceso ejecutado.',
             'dame el reporte': 'Envía el archivo Excel de reporte de evidencias si existe en la ruta configurada.',
             'disco': 'Muestra un menú para cambiar rápidamente entre los discos locales (C, D, E, F) y los guarda en caché.',
-            'info': 'Muestra una breve explicación de para qué sirve el comando especificado.'
+            'info': 'Muestra una breve explicación de para qué sirve el comando especificado.',
+            'mp3': 'Busca y descarga música de YouTube en formato MP3.',
+            'mp4': 'Busca y descarga videos de YouTube en formato MP4.'
         };
         this.opcIndex = 0;
         this.awaitingMod = {}; // jid -> { script, variable }
         this.awaitingInteractive = {}; // jid -> scriptName
         this.awaitingDrive = {}; // jid -> boolean
         this.awaitingPredict = {}; // jid -> boolean
+        this.awaitingYoutubeQuery = {}; // jid -> { type: 'mp3' | 'mp4' }
+        this.awaitingYoutubeSelection = {}; // jid -> { type: 'mp3' | 'mp4', results: [] }
     }
 
     async handle(msg, sock) {
@@ -109,6 +115,100 @@ class CommandHandler {
             this.awaitingPredict[jid] = false;
             console.log(`[PREDICT] Processing folder: ${num}`);
             await this.handlePredict(num, msg, sock);
+            return;
+        }
+
+        // Handle YouTube Query (Artist/Song)
+        if (this.awaitingYoutubeQuery[jid]) {
+            if (text.toLowerCase() === 'cancelar') {
+                this.awaitingYoutubeQuery[jid] = null;
+                await reply('❌ Operación cancelada. ¿Qué deseas hacer? (mp3 o mp4)');
+                return;
+            }
+
+            const { type } = this.awaitingYoutubeQuery[jid];
+            await reply(`🔍 Buscando "${text}" en YouTube...`);
+
+            try {
+                const results = await youtubeDownloader.search(text);
+                if (results.length === 0) {
+                    await reply('❌ No se encontraron resultados. Intenta con otro nombre.');
+                    return;
+                }
+
+                this.awaitingYoutubeQuery[jid] = null;
+                this.awaitingYoutubeSelection[jid] = { type, results };
+
+                for (let i = 0; i < results.length; i++) {
+                    const res = results[i];
+                    const caption = `*${i + 1}. ${res.title}*\n👤 Canal: ${res.author}\n⏱️ Duración: ${res.timestamp}\n👁️ Vistas: ${res.views.toLocaleString()}`;
+                    await sock.sendMessage(jid, { image: { url: res.thumbnail }, caption });
+                }
+
+                let selectionMsg = `🤖 *Selecciona una opción para descargar (${type.toUpperCase()}):*\n\n`;
+                if (type === 'mp3') {
+                    selectionMsg += `1️⃣ Descargar 1º (MP3)\n2️⃣ Descargar 2º (MP3)\n3️⃣ Descargar 3º (MP3)\n`;
+                    selectionMsg += `4️⃣ Descargar 1º (AAC)\n5️⃣ Descargar 2º (AAC)\n6️⃣ Descargar 3º (AAC)\n`;
+                    selectionMsg += `7️⃣ Descargar 1º (M4A)\n8️⃣ Descargar 2º (M4A)\n9️⃣ Descargar 3º (M4A)\n`;
+                } else {
+                    selectionMsg += `1️⃣ Descargar 1º (360p)\n2️⃣ Descargar 2º (360p)\n3️⃣ Descargar 3º (360p)\n`;
+                    selectionMsg += `4️⃣ Descargar 1º (720p)\n5️⃣ Descargar 2º (720p)\n6️⃣ Descargar 3º (720p)\n`;
+                    selectionMsg += `7️⃣ Descargar 1º (Mejor)\n8️⃣ Descargar 2º (Mejor)\n9️⃣ Descargar 3º (Mejor)\n`;
+                }
+                selectionMsg += `\n💡 Escribe *cancelar* para volver.`;
+                await reply(selectionMsg);
+            } catch (err) {
+                await reply(`❌ Error en la búsqueda: ${err.message}`);
+                this.awaitingYoutubeQuery[jid] = null;
+            }
+            return;
+        }
+
+        // Handle YouTube Selection (1-9)
+        if (this.awaitingYoutubeSelection[jid]) {
+            if (text.toLowerCase() === 'cancelar') {
+                this.awaitingYoutubeSelection[jid] = null;
+                await reply('🔙 Volviendo al menú. Escribe mp3 o mp4.');
+                return;
+            }
+
+            const selection = parseInt(text);
+            if (isNaN(selection) || selection < 1 || selection > 9) {
+                await reply('❌ Selección no válida. Por favor, elige un número del 1 al 9 o escribe *cancelar*.');
+                return;
+            }
+
+            const { type, results } = this.awaitingYoutubeSelection[jid];
+            const resultIndex = (selection - 1) % 3;
+            const video = results[resultIndex];
+            const formats = type === 'mp3' ? ['mp3', 'aac', 'm4a'] : ['360p', '720p', 'best'];
+            const formatIndex = Math.floor((selection - 1) / 3);
+            const format = formats[formatIndex];
+
+            this.awaitingYoutubeSelection[jid] = null;
+            await reply(`⏳ Descargando y compartiendo -> *[${video.title}]* como ${format.toUpperCase()}...`);
+
+            try {
+                const filePath = await youtubeDownloader.download(video.url, type === 'mp3' ? format : 'mp4', jid);
+
+                if (type === 'mp3') {
+                    await sock.sendMessage(jid, {
+                        audio: { url: filePath },
+                        mimetype: 'audio/mpeg',
+                        fileName: `${video.title}.mp3`
+                    });
+                } else {
+                    await sock.sendMessage(jid, {
+                        video: { url: filePath },
+                        caption: `🎬 ${video.title}`,
+                        fileName: `${video.title}.mp4`
+                    });
+                }
+
+                await youtubeDownloader.cleanup(filePath);
+            } catch (err) {
+                await reply(`❌ Error al descargar/enviar: ${err.message}`);
+            }
             return;
         }
 
@@ -331,6 +431,14 @@ class CommandHandler {
             else if (text === 'disco') {
                 this.awaitingDrive[jid] = true;
                 await reply('Elija disco:\n1. C\n2. D\n3. E\n4. F');
+            }
+            else if (text.toLowerCase() === 'mp3') {
+                this.awaitingYoutubeQuery[jid] = { type: 'mp3' };
+                await reply('🎵 *MP3 Downloader*\n\n¿Qué canción quieres oír? Dame el nombre de la canción + artista.\n\n_Ejemplo: Recuerdos de una noche de Pasteles Verdes_');
+            }
+            else if (text.toLowerCase() === 'mp4') {
+                this.awaitingYoutubeQuery[jid] = { type: 'mp4' };
+                await reply('🎬 *MP4 Downloader*\n\n¿Qué video quieres ver? Dame el nombre de la canción + artista.\n\n_Ejemplo: Los habitantes de Enrique Bunbury_');
             }
             else if (text.startsWith('info ')) {
                 const cmd = text.replace('info ', '').trim().toLowerCase();
