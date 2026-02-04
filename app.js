@@ -90,7 +90,10 @@ async function connectToWhatsApp() {
 
             console.log(`Connection closed (Code: ${statusCode}). Reconnecting: ${shouldReconnect}`);
 
-            if (shouldReconnect) {
+            if (statusCode === 515) {
+                console.log('Error 515 (Restart Required). Reconnecting immediately...');
+                connectToWhatsApp();
+            } else if (shouldReconnect) {
                 console.log('Waiting 3 seconds before reconnecting...');
                 setTimeout(connectToWhatsApp, 3000);
             }

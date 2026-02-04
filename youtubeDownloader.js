@@ -25,24 +25,53 @@ class YouTubeDownloader {
         }));
     }
 
-    async getMetadata(url) {
+    async getFormatMetadata(url) {
         try {
             const metadata = await this.ytdlp.getVideoMetadata(url);
-            return metadata;
-        } catch (err) {
-            console.error('[YOUTUBE] Error getting metadata:', err);
+            // We want to return some estimated sizes
+            // We'll pick best audio and best video at 360p, 720p
+            const formats = metadata.formats;
+            const res = {
+                mp3: 'Unknown',
+                aac: 'Unknown',
+                m4a: 'Unknown',
+                v360: 'Unknown',
+                v720: 'Unknown',
+                vBest: 'Unknown'
+            };
+
+            const formatSize = (filter) => {
+                const f = formats.find(filter);
+                if (f && f.filesize) return `${(f.filesize / 1024 / 1024).toFixed(1)}MB`;
+                if (f && f.filesize_approx) return `~${(f.filesize_approx / 1024 / 1024).toFixed(1)}MB`;
+                return 'N/A';
+            };
+
+            res.m4a = formatSize(f => f.ext === 'm4a' && f.vcodec === 'none');
+            res.mp3 = res.m4a; // Approximate
+            res.aac = res.m4a;
+
+            res.v360 = formatSize(f => f.height === 360 && f.ext === 'mp4');
+            res.v720 = formatSize(f => f.height === 720 && f.ext === 'mp4');
+            res.vBest = formatSize(f => f.ext === 'mp4');
+
+            return res;
+        } catch (e) {
             return null;
         }
     }
 
     async download(url, format = 'mp3', userId) {
-        const fileName = `${userId}_${Date.now()}.${format}`;
+        const isAudio = ['mp3', 'aac', 'm4a'].includes(format);
+        const videoFormatMap = { '360p': 'mp4', '720p': 'mp4', 'mejormp4': 'mp4', 'avi': 'avi', 'mpeg': 'mpeg' };
+        const ext = isAudio ? format : (videoFormatMap[format] || 'mp4');
+        const fileName = `${userId}_${Date.now()}.${ext}`;
         const outputPath = path.join(this.downloadsDir, fileName);
 
         console.log(`[YOUTUBE] Downloading ${url} as ${format} to ${outputPath}`);
 
         try {
-            if (format === 'mp3') {
+            if (isAudio) {
                 await this.ytdlp.download(url, {
                     filter: 'audioonly',
                     output: outputPath,
@@ -50,17 +79,29 @@ class YouTubeDownloader {
                     postProcess: [
                         {
                             key: 'FFmpegExtractAudio',
-                            preferredcodec: 'mp3',
+                            preferredcodec: format,
                             preferredquality: '192',
                         }
                     ]
                 });
             } else {
+                let ytdlpFormat = 'bestvideo+bestaudio/best';
+                if (format === '360p') ytdlpFormat = 'bestvideo[height<=360]+bestaudio/best[height<=360]';
+                else if (format === '720p') ytdlpFormat = 'bestvideo[height<=720]+bestaudio/best[height<=720]';
+
                 await this.ytdlp.download(url, {
                     output: outputPath,
-                    format: 'bestvideo+bestaudio/best',
-                    mergeOutputFormat: 'mp4'
+                    format: ytdlpFormat,
+                    mergeOutputFormat: ext === 'mp4' ? 'mp4' : ext
                 });
+            }
+
+            if (!(await fs.pathExists(outputPath))) {
+                const dirFiles = await fs.readdir(this.downloadsDir);
+                const base = path.basename(outputPath, `.${ext}`);
+                const found = dirFiles.find(f => f.includes(base));
+                if (found) return path.join(this.downloadsDir, found);
+                throw new Error(`File not found: ${outputPath}`);
             }
 
             return outputPath;
@@ -72,7 +113,7 @@ class YouTubeDownloader {
 
     async cleanup(filePath) {
         try {
-            if (await fs.pathExists(filePath)) {
+            if (filePath && await fs.pathExists(filePath)) {
                 await fs.remove(filePath);
                 console.log(`[YOUTUBE] Cleaned up: ${filePath}`);
             }

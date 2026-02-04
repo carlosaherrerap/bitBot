@@ -141,19 +141,22 @@ class CommandHandler {
 
                 for (let i = 0; i < results.length; i++) {
                     const res = results[i];
-                    const caption = `*${i + 1}. ${res.title}*\n👤 Canal: ${res.author}\n⏱️ Duración: ${res.timestamp}\n👁️ Vistas: ${res.views.toLocaleString()}`;
+                    const caption = `*${i + 1}. ${res.title}*\n👤 Canal: ${res.author}\n⏱️ Duración: ${res.timestamp}`;
                     await sock.sendMessage(jid, { image: { url: res.thumbnail }, caption });
                 }
 
-                let selectionMsg = `🤖 *Selecciona una opción para descargar (${type.toUpperCase()}):*\n\n`;
+                // Get metadata for the first video to estimate sizes
+                const sizes = await youtubeDownloader.getFormatMetadata(results[0].url) || {};
+
+                let selectionMsg = `🤖 *Selecciona una opción (${type.toUpperCase()}):*\n\n`;
                 if (type === 'mp3') {
-                    selectionMsg += `1️⃣ Descargar 1º (MP3)\n2️⃣ Descargar 2º (MP3)\n3️⃣ Descargar 3º (MP3)\n`;
-                    selectionMsg += `4️⃣ Descargar 1º (AAC)\n5️⃣ Descargar 2º (AAC)\n6️⃣ Descargar 3º (AAC)\n`;
-                    selectionMsg += `7️⃣ Descargar 1º (M4A)\n8️⃣ Descargar 2º (M4A)\n9️⃣ Descargar 3º (M4A)\n`;
+                    selectionMsg += `1️⃣ MP3 (1º) - ${sizes.mp3 || '...'}\n2️⃣ MP3 (2º) - ${sizes.mp3 || '...'}\n3️⃣ MP3 (3º) - ${sizes.mp3 || '...'}\n`;
+                    selectionMsg += `4️⃣ AAC (1º) - ${sizes.aac || '...'}\n5️⃣ AAC (2º) - ${sizes.aac || '...'}\n6️⃣ AAC (3º) - ${sizes.aac || '...'}\n`;
+                    selectionMsg += `7️⃣ M4A (1º) - ${sizes.m4a || '...'}\n8️⃣ M4A (2º) - ${sizes.m4a || '...'}\n9️⃣ M4A (3º) - ${sizes.m4a || '...'}\n`;
                 } else {
-                    selectionMsg += `1️⃣ Descargar 1º (360p)\n2️⃣ Descargar 2º (360p)\n3️⃣ Descargar 3º (360p)\n`;
-                    selectionMsg += `4️⃣ Descargar 1º (720p)\n5️⃣ Descargar 2º (720p)\n6️⃣ Descargar 3º (720p)\n`;
-                    selectionMsg += `7️⃣ Descargar 1º (Mejor)\n8️⃣ Descargar 2º (Mejor)\n9️⃣ Descargar 3º (Mejor)\n`;
+                    selectionMsg += `1️⃣ MP4 (1º) - ${sizes.v360 || '...'}\n2️⃣ MP4 (2º) - ${sizes.v360 || '...'}\n3️⃣ MP4 (3º) - ${sizes.v360 || '...'}\n`;
+                    selectionMsg += `4️⃣ AVI (1º) - ${sizes.v720 || '...'}\n5️⃣ AVI (2º) - ${sizes.v720 || '...'}\n6️⃣ AVI (3º) - ${sizes.v720 || '...'}\n`;
+                    selectionMsg += `7️⃣ MPEG (1º) - ${sizes.vBest || '...'}\n8️⃣ MPEG (2º) - ${sizes.vBest || '...'}\n9️⃣ MPEG (3º) - ${sizes.vBest || '...'}\n`;
                 }
                 selectionMsg += `\n💡 Escribe *cancelar* para volver.`;
                 await reply(selectionMsg);
@@ -174,34 +177,42 @@ class CommandHandler {
 
             const selection = parseInt(text);
             if (isNaN(selection) || selection < 1 || selection > 9) {
-                await reply('❌ Selección no válida. Por favor, elige un número del 1 al 9 o escribe *cancelar*.');
+                await reply('❌ Selección no válida. Por favor, elige un número del 1 al 9.');
                 return;
             }
 
             const { type, results } = this.awaitingYoutubeSelection[jid];
             const resultIndex = (selection - 1) % 3;
             const video = results[resultIndex];
-            const formats = type === 'mp3' ? ['mp3', 'aac', 'm4a'] : ['360p', '720p', 'best'];
-            const formatIndex = Math.floor((selection - 1) / 3);
-            const format = formats[formatIndex];
+
+            let format;
+            if (type === 'mp3') {
+                const formats = ['mp3', 'aac', 'm4a'];
+                format = formats[Math.floor((selection - 1) / 3)];
+            } else {
+                const formats = ['mp4', 'avi', 'mpeg'];
+                format = formats[Math.floor((selection - 1) / 3)];
+            }
 
             this.awaitingYoutubeSelection[jid] = null;
-            await reply(`⏳ Descargando y compartiendo -> *[${video.title}]* como ${format.toUpperCase()}...`);
+            await reply(`⏳ Descargando y compartiendo -> *[${video.title}]* (${format.toUpperCase()})...`);
 
             try {
-                const filePath = await youtubeDownloader.download(video.url, type === 'mp3' ? format : 'mp4', jid);
+                const filePath = await youtubeDownloader.download(video.url, format, jid);
+                const stats = await fs.stat(filePath);
+                const sizeStr = (stats.size / 1024 / 1024).toFixed(1) + 'MB';
 
                 if (type === 'mp3') {
                     await sock.sendMessage(jid, {
                         audio: { url: filePath },
-                        mimetype: 'audio/mpeg',
-                        fileName: `${video.title}.mp3`
+                        mimetype: format === 'mp3' ? 'audio/mpeg' : (format === 'aac' ? 'audio/aac' : 'audio/mp4'),
+                        fileName: `${video.title}.${format}`
                     });
                 } else {
                     await sock.sendMessage(jid, {
                         video: { url: filePath },
-                        caption: `🎬 ${video.title}`,
-                        fileName: `${video.title}.mp4`
+                        caption: `🎬 ${video.title} (${sizeStr})`,
+                        fileName: `${video.title}.${format}`
                     });
                 }
 
