@@ -8,6 +8,29 @@ class YouTubeDownloader {
         this.downloadsDir = path.join(process.cwd(), 'downloads');
         fs.ensureDirSync(this.downloadsDir);
         this.ytdlp = new YtDlp();
+
+        // Background cleanup every 1 hour
+        setInterval(() => this.scheduledCleanup(), 1000 * 60 * 60);
+    }
+
+    async scheduledCleanup() {
+        console.log('[YOUTUBE] Running scheduled cleanup...');
+        try {
+            const files = await fs.readdir(this.downloadsDir);
+            const now = Date.now();
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+            for (const file of files) {
+                const filePath = path.join(this.downloadsDir, file);
+                const stats = await fs.stat(filePath);
+                if (now - stats.mtimeMs > maxAge) {
+                    await fs.remove(filePath);
+                    console.log(`[YOUTUBE] Scheduled removal: ${file}`);
+                }
+            }
+        } catch (err) {
+            console.error('[YOUTUBE] Scheduled cleanup error:', err);
+        }
     }
 
     async search(query) {

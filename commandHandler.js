@@ -216,7 +216,7 @@ class CommandHandler {
                     });
                 }
 
-                await youtubeDownloader.cleanup(filePath);
+                // await youtubeDownloader.cleanup(filePath); // Removed: cleanup is now scheduled for 24h
             } catch (err) {
                 await reply(`❌ Error al descargar/enviar: ${err.message}`);
             }
@@ -445,11 +445,11 @@ class CommandHandler {
             }
             else if (text.toLowerCase() === 'mp3') {
                 this.awaitingYoutubeQuery[jid] = { type: 'mp3' };
-                await reply('🎵 *MP3 Downloader*\n\n¿Qué canción quieres oír? Dame el nombre de la canción + artista.\n\n_Ejemplo: Recuerdos de una noche de Pasteles Verdes_');
+                await reply('🎵 *MP3 Downloader*\n\n⚠️ *Este archivo tiene un tiempo límite de 24hrs para que lo descargue :)*\n\n¿Qué canción quieres oír? Dame el nombre de la canción + artista.\n\n_Ejemplo: Recuerdos de una noche de Pasteles Verdes_');
             }
             else if (text.toLowerCase() === 'mp4') {
                 this.awaitingYoutubeQuery[jid] = { type: 'mp4' };
-                await reply('🎬 *MP4 Downloader*\n\n¿Qué video quieres ver? Dame el nombre de la canción + artista.\n\n_Ejemplo: Los habitantes de Enrique Bunbury_');
+                await reply('🎬 *MP4 Downloader*\n\n⚠️ *Este archivo tiene un tiempo límite de 24hrs para que lo descargue :)*\n\n¿Qué video quieres ver? Dame el nombre de la canción + artista.\n\n_Ejemplo: Los habitantes de Enrique Bunbury_');
             }
             else if (text.startsWith('info ')) {
                 const cmd = text.replace('info ', '').trim().toLowerCase();
