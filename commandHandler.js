@@ -154,8 +154,8 @@ class CommandHandler {
                     selectionMsg += `4️⃣ AAC (1º) - ${sizes.aac || '...'}\n5️⃣ AAC (2º) - ${sizes.aac || '...'}\n6️⃣ AAC (3º) - ${sizes.aac || '...'}\n`;
                     selectionMsg += `7️⃣ M4A (1º) - ${sizes.m4a || '...'}\n8️⃣ M4A (2º) - ${sizes.m4a || '...'}\n9️⃣ M4A (3º) - ${sizes.m4a || '...'}\n`;
                 } else {
-                    selectionMsg += `1️⃣ MP4 (1º) - ${sizes.v360 || '...'}\n2️⃣ MP4 (2º) - ${sizes.v360 || '...'}\n3️⃣ MP4 (3º) - ${sizes.v360 || '...'}\n`;
-                    selectionMsg += `4️⃣ AVI (1º) - ${sizes.v720 || '...'}\n5️⃣ AVI (2º) - ${sizes.v720 || '...'}\n6️⃣ AVI (3º) - ${sizes.v720 || '...'}\n`;
+                    selectionMsg += `1️⃣ MP4 (1º) - ${sizes.vBest || '...'}\n2️⃣ MP4 (2º) - ${sizes.vBest || '...'}\n3️⃣ MP4 (3º) - ${sizes.vBest || '...'}\n`;
+                    selectionMsg += `4️⃣ AVI (1º) - ${sizes.vBest || '...'}\n5️⃣ AVI (2º) - ${sizes.vBest || '...'}\n6️⃣ AVI (3º) - ${sizes.vBest || '...'}\n`;
                     selectionMsg += `7️⃣ MPEG (1º) - ${sizes.vBest || '...'}\n8️⃣ MPEG (2º) - ${sizes.vBest || '...'}\n9️⃣ MPEG (3º) - ${sizes.vBest || '...'}\n`;
                 }
                 selectionMsg += `\n💡 Escribe *cancelar* para volver.`;
@@ -195,7 +195,7 @@ class CommandHandler {
             }
 
             this.awaitingYoutubeSelection[jid] = null;
-            await reply(`⏳ Descargando y compartiendo -> *[${video.title}]* (${format.toUpperCase()})...`);
+            await reply(`⏳ Descargando y compartiendo -> [${video.title}] (${format.toUpperCase()})...`);
 
             try {
                 const filePath = await youtubeDownloader.download(video.url, format, jid);
@@ -449,7 +449,7 @@ class CommandHandler {
             }
             else if (text.toLowerCase() === 'mp4') {
                 this.awaitingYoutubeQuery[jid] = { type: 'mp4' };
-                await reply('🎬 *MP4 Downloader*\n\n⚠️ *Este archivo tiene un tiempo límite de 24hrs para que lo descargue :)*\n\n¿Qué video quieres ver? Dame el nombre de la canción + artista.\n\n_Ejemplo: Los habitantes de Enrique Bunbury_');
+                await reply('🎬 MP4 Downloader\n\n⚠️ Este archivo tiene un tiempo límite de 24hrs para que lo descargue :)\n\n¿Qué video quieres ver? Dame el nombre de la canción + artista.\n\nEjemplo: Los habitantes de Enrique Bunbury');
             }
             else if (text.startsWith('info ')) {
                 const cmd = text.replace('info ', '').trim().toLowerCase();
