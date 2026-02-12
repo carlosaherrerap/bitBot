@@ -1,46 +1,71 @@
-import sys
-import os
-import yt_dlp
+import subprocess
+
+def has_ffmpeg():
+    try:
+        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        return False
 
 def download_video(url, format_type, output_path):
+    output_path = os.path.abspath(output_path)
     print(f"Downloading {url} with format {format_type} to {output_path}")
     
+    ffmpeg_available = has_ffmpeg()
+    if not ffmpeg_available:
+        print("Warning: FFmpeg not detected. Using limited fallback mode.")
+
     ydl_opts = {
-        'outtmpl': output_path,
+        'outtmpl': output_path.replace('%', '%%'), # Escape percentages in path
         'quiet': True,
         'no_warnings': True,
+        'noplaylist': True,
     }
 
     if format_type in ['mp3', 'aac', 'm4a']:
-        ydl_opts.update({
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': format_type,
-                'preferredquality': '192',
-            }],
-        })
-    else:
-        # MP4 logic: best compatibility for WhatsApp Mobile
-        if format_type == 'mp4':
+        if ffmpeg_available:
             ydl_opts.update({
-                'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'merge_output_format': 'mp4',
+                'format': 'bestaudio/best',
                 'postprocessors': [{
-                    'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4',
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': format_type,
+                    'preferredquality': '192',
                 }],
-                'postprocessor_args': [
-                    'ffmpeg', '-vcodec', 'libx264', '-profile:v', 'baseline', '-level', '3.0', 
-                    '-pix_fmt', 'yuv420p', '-acodec', 'aac', '-movflags', '+faststart'
-                ],
             })
         else:
-            # For AVI, MPEG, etc.
+            # Low quality fallback without FFmpeg
+            ydl_opts.update({
+                'format': 'bestaudio[ext=m4a]/bestaudio',
+            })
+    else:
+        # MP4 logic
+        if format_type == 'mp4':
+            if ffmpeg_available:
+                ydl_opts.update({
+                    'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                    'merge_output_format': 'mp4',
+                    'postprocessors': [{
+                        'key': 'FFmpegVideoConvertor',
+                        'preferedformat': 'mp4',
+                    }],
+                    'postprocessor_args': [
+                        'ffmpeg', '-vcodec', 'libx264', '-profile:v', 'baseline', '-level', '3.0', 
+                        '-pix_fmt', 'yuv420p', '-acodec', 'aac', '-movflags', '+faststart'
+                    ],
+                })
+            else:
+                # Fallback: Download a pre-merged MP4 directly from YouTube (usually format 18 or 22)
+                # These don't require FFmpeg but might not be 100% mobile-friendly
+                ydl_opts.update({
+                    'format': 'best[ext=mp4]/best',
+                })
+        else:
+            # For AVI, MPEG, etc. (mostly require FFmpeg)
             ydl_opts.update({
                 'format': 'best',
-                'merge_output_format': format_type,
             })
+            if ffmpeg_available:
+                ydl_opts['merge_output_format'] = format_type
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

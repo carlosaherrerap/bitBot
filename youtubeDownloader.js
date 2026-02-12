@@ -100,8 +100,9 @@ class YouTubeDownloader {
         const isAudio = ['mp3', 'aac', 'm4a'].includes(format);
         const videoFormatMap = { 'mp4': 'mp4', 'avi': 'avi', 'mpeg': 'mpeg' };
         const ext = isAudio ? format : (videoFormatMap[format] || 'mp4');
-        const fileName = `${userId}_${Date.now()}.${ext}`;
-        const outputPath = path.join(this.downloadsDir, fileName);
+        const safeUserId = userId.replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `${safeUserId}_${Date.now()}.${ext}`;
+        const outputPath = path.resolve(this.downloadsDir, fileName);
 
         console.log(`[YOUTUBE] Downloading ${url} as ${format} to ${outputPath} via Python`);
 
