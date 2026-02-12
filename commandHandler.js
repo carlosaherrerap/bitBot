@@ -4,7 +4,7 @@ const stateManager = require('./stateManager');
 const fileEditor = require('./fileEditor');
 const scriptRunner = require('./scriptRunner');
 const youtubeDownloader = require('./youtubeDownloader');
-
+//comentarios
 class CommandHandler {
     constructor() {
         this.commands = [
