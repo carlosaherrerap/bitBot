@@ -86,7 +86,7 @@ class YouTubeDownloader {
 
     async download(url, format = 'mp3', userId) {
         const isAudio = ['mp3', 'aac', 'm4a'].includes(format);
-        const videoFormatMap = { '360p': 'mp4', '720p': 'mp4', 'mejormp4': 'mp4', 'avi': 'avi', 'mpeg': 'mpeg' };
+        const videoFormatMap = { 'mp4': 'mp4', 'avi': 'avi', 'mpeg': 'mpeg' };
         const ext = isAudio ? format : (videoFormatMap[format] || 'mp4');
         const fileName = `${userId}_${Date.now()}.${ext}`;
         const outputPath = path.join(this.downloadsDir, fileName);
@@ -108,15 +108,35 @@ class YouTubeDownloader {
                     ]
                 });
             } else {
-                let ytdlpFormat = 'bestvideo+bestaudio/best';
-                if (format === '360p') ytdlpFormat = 'bestvideo[height<=360]+bestaudio/best[height<=360]';
-                else if (format === '720p') ytdlpFormat = 'bestvideo[height<=720]+bestaudio/best[height<=720]';
-
-                await this.ytdlp.download(url, {
+                // For MP4, we force H.264 and AAC for maximum compatibility with WhatsApp/Mobile
+                const downloadOpts = {
                     output: outputPath,
-                    format: ytdlpFormat,
-                    mergeOutputFormat: ext === 'mp4' ? 'mp4' : ext
-                });
+                    format: 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                    mergeOutputFormat: ext
+                };
+
+                if (ext === 'mp4') {
+                    downloadOpts.postProcess = [
+                        {
+                            key: 'FFmpegVideoConvertor',
+                            preferedformat: 'mp4',
+                        },
+                        {
+                            key: 'FFmpegExtractAudio',
+                            preferredcodec: 'aac',
+                        },
+                        {
+                            key: 'FFmpegEmbedSubtitle',
+                        }
+                    ];
+                    // Additional args for H.264 high compatibility
+                    downloadOpts.addArgs = [
+                        '--recode-video', 'mp4',
+                        '--postprocessor-args', 'ffmpeg:-vcodec libx264 -acodec aac -pix_fmt yuv420p -profile:v main -level 3.1'
+                    ];
+                }
+
+                await this.ytdlp.download(url, downloadOpts);
             }
 
             if (!(await fs.pathExists(outputPath))) {

@@ -190,8 +190,7 @@ class CommandHandler {
                 const formats = ['mp3', 'aac', 'm4a'];
                 format = formats[Math.floor((selection - 1) / 3)];
             } else {
-                // Here we pass specific quality/format strings that youtubeDownloader expects
-                const formats = ['360p', '720p', 'mejormp4', 'avi', 'mpeg'];
+                const formats = ['mp4', 'avi', 'mpeg'];
                 format = formats[Math.floor((selection - 1) / 3)];
             }
 
