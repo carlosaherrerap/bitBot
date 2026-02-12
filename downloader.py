@@ -1,4 +1,8 @@
+import sys
+import os
 import subprocess
+import json
+import yt_dlp
 
 def has_ffmpeg():
     try:
@@ -76,7 +80,6 @@ def download_video(url, format_type, output_path):
         print(f"Error during download: {str(e)}", file=sys.stderr)
         return False
 
-import json
 
 def get_metadata(url):
     ydl_opts = {
