@@ -116,23 +116,10 @@ class YouTubeDownloader {
                 };
 
                 if (ext === 'mp4') {
-                    downloadOpts.postProcess = [
-                        {
-                            key: 'FFmpegVideoConvertor',
-                            preferedformat: 'mp4',
-                        },
-                        {
-                            key: 'FFmpegExtractAudio',
-                            preferredcodec: 'aac',
-                        },
-                        {
-                            key: 'FFmpegEmbedSubtitle',
-                        }
-                    ];
-                    // Additional args for H.264 high compatibility
+                    // Force H.264 Baseline profile and faststart for maximum mobile compatibility
                     downloadOpts.addArgs = [
                         '--recode-video', 'mp4',
-                        '--postprocessor-args', 'ffmpeg:-vcodec libx264 -acodec aac -pix_fmt yuv420p -profile:v main -level 3.1'
+                        '--postprocessor-args', 'ffmpeg:-vcodec libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -acodec aac -movflags +faststart'
                     ];
                 }
 
