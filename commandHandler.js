@@ -190,7 +190,8 @@ class CommandHandler {
                 const formats = ['mp3', 'aac', 'm4a'];
                 format = formats[Math.floor((selection - 1) / 3)];
             } else {
-                const formats = ['mp4', 'avi', 'mpeg'];
+                // Here we pass specific quality/format strings that youtubeDownloader expects
+                const formats = ['360p', '720p', 'mejormp4', 'avi', 'mpeg'];
                 format = formats[Math.floor((selection - 1) / 3)];
             }
 
@@ -216,7 +217,7 @@ class CommandHandler {
                     });
                 }
 
-                // await youtubeDownloader.cleanup(filePath); // Removed: cleanup is now scheduled for 24h
+                // The file will be kept for 24 hours by the scheduled cleanup in youtubeDownloader.js
             } catch (err) {
                 await reply(`❌ Error al descargar/enviar: ${err.message}`);
             }
