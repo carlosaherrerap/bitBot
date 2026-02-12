@@ -1,13 +1,14 @@
 const yts = require('yt-search');
-const { YtDlp } = require('ytdlp-nodejs');
 const path = require('path');
 const fs = require('fs-extra');
+const { spawn } = require('child_process');
 
 class YouTubeDownloader {
     constructor() {
         this.downloadsDir = path.join(process.cwd(), 'downloads');
         fs.ensureDirSync(this.downloadsDir);
-        this.ytdlp = new YtDlp();
+        this.downloadsDir = path.join(process.cwd(), 'downloads');
+        fs.ensureDirSync(this.downloadsDir);
 
         // Background cleanup every 1 hour
         setInterval(() => this.scheduledCleanup(), 1000 * 60 * 60);
@@ -49,39 +50,50 @@ class YouTubeDownloader {
     }
 
     async getFormatMetadata(url) {
-        try {
-            const metadata = await this.ytdlp.getVideoMetadata(url);
-            // We want to return some estimated sizes
-            // We'll pick best audio and best video at 360p, 720p
-            const formats = metadata.formats;
-            const res = {
-                mp3: 'Unknown',
-                aac: 'Unknown',
-                m4a: 'Unknown',
-                v360: 'Unknown',
-                v720: 'Unknown',
-                vBest: 'Unknown'
-            };
+        return new Promise((resolve) => {
+            const pythonScript = path.join(process.cwd(), 'downloader.py');
+            const pythonProcess = spawn('python', [pythonScript, '--metadata', url]);
 
-            const formatSize = (filter) => {
-                const f = formats.find(filter);
-                if (f && f.filesize) return `${(f.filesize / 1024 / 1024).toFixed(1)}MB`;
-                if (f && f.filesize_approx) return `~${(f.filesize_approx / 1024 / 1024).toFixed(1)}MB`;
-                return 'N/A';
-            };
+            let output = '';
+            pythonProcess.stdout.on('data', (data) => {
+                output += data.toString();
+            });
 
-            res.m4a = formatSize(f => f.ext === 'm4a' && f.vcodec === 'none');
-            res.mp3 = res.m4a; // Approximate
-            res.aac = res.m4a;
+            pythonProcess.on('close', (code) => {
+                if (code !== 0) return resolve(null);
+                try {
+                    const metadata = JSON.parse(output);
+                    const formats = metadata.formats;
+                    const res = {
+                        mp3: 'Unknown',
+                        aac: 'Unknown',
+                        m4a: 'Unknown',
+                        v360: 'Unknown',
+                        v720: 'Unknown',
+                        vBest: 'Unknown'
+                    };
 
-            res.v360 = formatSize(f => f.height === 360 && f.ext === 'mp4');
-            res.v720 = formatSize(f => f.height === 720 && f.ext === 'mp4');
-            res.vBest = formatSize(f => f.ext === 'mp4');
+                    const formatSize = (filter) => {
+                        const f = formats.find(filter);
+                        if (f && f.filesize) return `${(f.filesize / 1024 / 1024).toFixed(1)}MB`;
+                        if (f && f.filesize_approx) return `~${(f.filesize_approx / 1024 / 1024).toFixed(1)}MB`;
+                        return 'N/A';
+                    };
 
-            return res;
-        } catch (e) {
-            return null;
-        }
+                    res.m4a = formatSize(f => f.ext === 'm4a' && f.vcodec === 'none');
+                    res.mp3 = res.m4a;
+                    res.aac = res.m4a;
+
+                    res.v360 = formatSize(f => f.height === 360 && f.ext === 'mp4');
+                    res.v720 = formatSize(f => f.height === 720 && f.ext === 'mp4');
+                    res.vBest = formatSize(f => f.ext === 'mp4');
+
+                    resolve(res);
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        });
     }
 
     async download(url, format = 'mp3', userId) {
@@ -91,46 +103,43 @@ class YouTubeDownloader {
         const fileName = `${userId}_${Date.now()}.${ext}`;
         const outputPath = path.join(this.downloadsDir, fileName);
 
-        console.log(`[YOUTUBE] Downloading ${url} as ${format} to ${outputPath}`);
+        console.log(`[YOUTUBE] Downloading ${url} as ${format} to ${outputPath} via Python`);
 
-        try {
-            if (isAudio) {
-                await this.ytdlp.download(url, {
-                    filter: 'audioonly',
-                    output: outputPath,
-                    format: 'bestaudio/best',
-                    postProcess: [
-                        {
-                            key: 'FFmpegExtractAudio',
-                            preferredcodec: format,
-                            preferredquality: '192',
+        return new Promise((resolve, reject) => {
+            const pythonScript = path.join(process.cwd(), 'downloader.py');
+            const pythonProcess = spawn('python', [pythonScript, url, format, outputPath]);
+
+            let errorOutput = '';
+
+            pythonProcess.stdout.on('data', (data) => {
+                console.log(`[PYTHON] ${data.toString().trim()}`);
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                errorOutput += data.toString();
+                console.error(`[PYTHON-ERROR] ${data.toString().trim()}`);
+            });
+
+            pythonProcess.on('close', async (code) => {
+                if (code === 0) {
+                    if (await fs.pathExists(outputPath)) {
+                        resolve(outputPath);
+                    } else {
+                        // Sometimes the filename changes slightly if postprocessors were involved
+                        const dirFiles = await fs.readdir(this.downloadsDir);
+                        const base = path.basename(outputPath, `.${ext}`);
+                        const found = dirFiles.find(f => f.includes(base));
+                        if (found) {
+                            resolve(path.join(this.downloadsDir, found));
+                        } else {
+                            reject(new Error(`File not found after download: ${outputPath}`));
                         }
-                    ]
-                });
-            } else {
-                // Simplified "Safe Mode" for MP4: Use native YouTube MP4 formats for maximum compatibility
-                const downloadOpts = {
-                    output: outputPath,
-                    format: 'best[ext=mp4]/best',
-                    mergeOutputFormat: ext
-                };
-
-                await this.ytdlp.download(url, downloadOpts);
-            }
-
-            if (!(await fs.pathExists(outputPath))) {
-                const dirFiles = await fs.readdir(this.downloadsDir);
-                const base = path.basename(outputPath, `.${ext}`);
-                const found = dirFiles.find(f => f.includes(base));
-                if (found) return path.join(this.downloadsDir, found);
-                throw new Error(`File not found: ${outputPath}`);
-            }
-
-            return outputPath;
-        } catch (err) {
-            console.error('[YOUTUBE] Download error:', err);
-            throw err;
-        }
+                    }
+                } else {
+                    reject(new Error(`Python downloader failed with code ${code}. Error: ${errorOutput}`));
+                }
+            });
+        });
     }
 
     async cleanup(filePath) {
