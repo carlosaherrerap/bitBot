@@ -108,20 +108,12 @@ class YouTubeDownloader {
                     ]
                 });
             } else {
-                // For MP4, we force H.264 and AAC for maximum compatibility with WhatsApp/Mobile
+                // Simplified "Safe Mode" for MP4: Use native YouTube MP4 formats for maximum compatibility
                 const downloadOpts = {
                     output: outputPath,
-                    format: 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                    format: 'best[ext=mp4]/best',
                     mergeOutputFormat: ext
                 };
-
-                if (ext === 'mp4') {
-                    // Force H.264 Baseline profile and faststart for maximum mobile compatibility
-                    downloadOpts.addArgs = [
-                        '--recode-video', 'mp4',
-                        '--postprocessor-args', 'ffmpeg:-vcodec libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -acodec aac -movflags +faststart'
-                    ];
-                }
 
                 await this.ytdlp.download(url, downloadOpts);
             }
