@@ -21,9 +21,10 @@ def download_video(url, format_type, output_path):
 
     ydl_opts = {
         'outtmpl': output_path.replace('%', '%%'), # Escape percentages in path
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False, # Changed to False for better debugging
+        'no_warnings': False,
         'noplaylist': True,
+        'verbose': True, # Enable verbose mode to see the actual ffmpeg command
     }
 
     if format_type in ['mp3', 'aac', 'm4a']:
@@ -52,10 +53,12 @@ def download_video(url, format_type, output_path):
                         'key': 'FFmpegVideoConvertor',
                         'preferedformat': 'mp4',
                     }],
-                    'postprocessor_args': [
-                        'ffmpeg', '-vcodec', 'libx264', '-profile:v', 'baseline', '-level', '3.0', 
-                        '-pix_fmt', 'yuv420p', '-acodec', 'aac', '-movflags', '+faststart'
-                    ],
+                    'postprocessor_args': {
+                        'FFmpegVideoConvertor': [
+                            '-vcodec', 'libx264', '-profile:v', 'baseline', '-level', '3.0', 
+                            '-pix_fmt', 'yuv420p', '-acodec', 'aac', '-movflags', '+faststart'
+                        ],
+                    },
                 })
             else:
                 # Fallback: Download a pre-merged MP4 directly from YouTube (usually format 18 or 22)
