@@ -7,8 +7,8 @@ class YouTubeDownloader {
     constructor() {
         this.downloadsDir = path.join(process.cwd(), 'downloads');
         fs.ensureDirSync(this.downloadsDir);
-        this.downloadsDir = path.join(process.cwd(), 'downloads');
-        fs.ensureDirSync(this.downloadsDir);
+        // Detect python command: 'python3' for Linux/Docker, 'python' for Windows
+        this.pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
 
         // Background cleanup every 1 hour
         setInterval(() => this.scheduledCleanup(), 1000 * 60 * 60);
@@ -52,7 +52,7 @@ class YouTubeDownloader {
     async getFormatMetadata(url) {
         return new Promise((resolve) => {
             const pythonScript = path.join(process.cwd(), 'downloader.py');
-            const pythonProcess = spawn('python', [pythonScript, '--metadata', url]);
+            const pythonProcess = spawn(this.pythonCommand, [pythonScript, '--metadata', url]);
 
             let output = '';
             pythonProcess.stdout.on('data', (data) => {
@@ -108,7 +108,7 @@ class YouTubeDownloader {
 
         return new Promise((resolve, reject) => {
             const pythonScript = path.join(process.cwd(), 'downloader.py');
-            const pythonProcess = spawn('python', [pythonScript, url, format, outputPath]);
+            const pythonProcess = spawn(this.pythonCommand, [pythonScript, url, format, outputPath]);
 
             let errorOutput = '';
 
