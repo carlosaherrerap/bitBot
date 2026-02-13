@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: bitbot
+    restart: always
+    volumes:
+      - ./auth_info_baileys:/app/auth_info_baileys
+      - ./downloads:/app/downloads
+    ports:
+      - "9001:9001"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10mb"
+        max-file: "3"
