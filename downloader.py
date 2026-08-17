@@ -11,6 +11,41 @@ def has_ffmpeg():
     except FileNotFoundError:
         return False
 
+def get_base_ydl_opts():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    cookies_path = os.path.join(script_dir, 'cookies.txt')
+    
+    opts = {
+        'quiet': False,
+        'no_warnings': False,
+        'noplaylist': True,
+        'verbose': True,
+        'retries': 10,
+        'fragment_retries': 10,
+        'file_access_retries': 5,
+        'socket_timeout': 30,
+        'http_chunk_size': 10485760,  # 10MB chunking prevents 403 Forbidden disconnects on long media
+        'geo_bypass': True,
+        'nocheckcertificate': True,
+        'js_runtimes': {
+            'node': {},
+        },
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb', 'web'],
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        }
+    }
+    
+    if os.path.exists(cookies_path):
+        opts['cookiefile'] = cookies_path
+        
+    return opts
+
 def download_video(url, format_type, output_path):
     output_path = os.path.abspath(output_path)
     print(f"Downloading {url} with format {format_type} to {output_path}")
@@ -19,13 +54,8 @@ def download_video(url, format_type, output_path):
     if not ffmpeg_available:
         print("Warning: FFmpeg not detected. Using limited fallback mode.")
 
-    ydl_opts = {
-        'outtmpl': output_path.replace('%', '%%'), # Escape percentages in path
-        'quiet': False, # Changed to False for better debugging
-        'no_warnings': False,
-        'noplaylist': True,
-        'verbose': True, # Enable verbose mode to see the actual ffmpeg command
-    }
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts['outtmpl'] = output_path.replace('%', '%%')
 
     if format_type in ['mp3', 'aac', 'm4a']:
         if ffmpeg_available:
@@ -62,7 +92,6 @@ def download_video(url, format_type, output_path):
                 })
             else:
                 # Fallback: Download a pre-merged MP4 directly from YouTube (usually format 18 or 22)
-                # These don't require FFmpeg but might not be 100% mobile-friendly
                 ydl_opts.update({
                     'format': 'best[ext=mp4]/best',
                 })
@@ -83,12 +112,12 @@ def download_video(url, format_type, output_path):
         print(f"Error during download: {str(e)}", file=sys.stderr)
         return False
 
-
 def get_metadata(url):
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-    }
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts['quiet'] = True
+    ydl_opts['no_warnings'] = True
+    ydl_opts['verbose'] = False
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
